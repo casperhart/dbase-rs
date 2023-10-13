@@ -1,7 +1,8 @@
 use std::convert::{TryFrom, TryInto};
-use std::fmt;
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
+use std::time::Duration;
+use std::{fmt, thread};
 
 use crate::Encoding;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -232,7 +233,14 @@ impl FieldValue {
                 };
 
                 if let Some(memo_reader) = memo_reader {
-                    let data_from_memo = memo_reader.read_data_at(index_in_memo)?;
+                    // if error, retry once after a short delay
+                    let data_from_memo = match memo_reader.read_data_at(index_in_memo) {
+                        Ok(data) => data,
+                        Err(_) => {
+                            thread::sleep(Duration::from_millis(200));
+                            memo_reader.read_data_at(index_in_memo)?
+                        }
+                    };
                     FieldValue::Memo(encoding.decode(data_from_memo)?.to_string())
                 } else {
                     return Err(ErrorKind::MissingMemoFile);
